@@ -1,0 +1,199 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.spec.KeySpec;
+import java.text.SimpleDateFormat;
+import java.util.Base64;
+import java.util.Date;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+
+public class AESBase64EncryptDecryptGUI {
+    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
+    private static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final byte[] IV = new byte[16];
+    private static final String LOG_FILE_PATH = "encryption_log.txt";
+
+    public AESBase64EncryptDecryptGUI() {}
+
+    public static void main(String[] args) {
+        String disclaimer = "DISCLAIMER:\n\n"
+                + "This software is provided \"as-is,\" without any express or implied warranties. "
+                + "In no event shall the developers be held liable for any damages arising from the use of this software.\n\n"
+                + "No support or maintenance is provided, and use of this program is entirely at your own risk.\n\n"
+                + "By proceeding, you agree to these terms.\n\n"
+                + "Click OK to continue.";
+
+        int response = JOptionPane.showConfirmDialog(null, disclaimer, "Disclaimer", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (response != JOptionPane.OK_OPTION) {
+            System.exit(0);
+        }
+
+        final JFrame frame = new JFrame("AES Base64 Encrypt/Decrypt Tool with Password");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(600, 400);
+        frame.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+
+        JLabel inputLabel = new JLabel("Enter Text to Encrypt:");
+        JLabel passwordLabel = new JLabel("Enter Password:");
+        JLabel encryptedLabel = new JLabel("Encrypted (Base64):");
+        JLabel decryptedLabel = new JLabel("Decrypted (Original):");
+
+        final JTextArea inputTextArea = new JTextArea(3, 20);
+        inputTextArea.setLineWrap(true);
+        inputTextArea.setWrapStyleWord(true);
+
+        final JTextArea encryptedTextArea = new JTextArea(3, 20);
+        encryptedTextArea.setLineWrap(true);
+        encryptedTextArea.setWrapStyleWord(true);
+
+        final JTextArea decryptedTextArea = new JTextArea(3, 20);
+        decryptedTextArea.setLineWrap(true);
+        decryptedTextArea.setWrapStyleWord(true);
+
+        final JPasswordField passwordField = new JPasswordField(20);
+
+        JButton encryptButton = new JButton("Encrypt");
+        JButton decryptButton = new JButton("Decrypt");
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.WEST;
+        frame.add(inputLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        frame.add(new JScrollPane(inputTextArea), gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        frame.add(passwordLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        frame.add(passwordField, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 2;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.EAST;
+        frame.add(encryptButton, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.anchor = GridBagConstraints.WEST;
+        frame.add(encryptedLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        frame.add(new JScrollPane(encryptedTextArea), gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 4;
+        gbc.anchor = GridBagConstraints.EAST;
+        frame.add(decryptButton, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.anchor = GridBagConstraints.WEST;
+        frame.add(decryptedLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 5;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        frame.add(new JScrollPane(decryptedTextArea), gbc);
+
+        encryptButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                String inputText = inputTextArea.getText();
+                String password = new String(passwordField.getPassword());
+                if (!inputText.isEmpty() && !password.isEmpty()) {
+                    try {
+                        String encryptedText = AESBase64EncryptDecryptGUI.encrypt(inputText, password);
+                        encryptedTextArea.setText(encryptedText);
+                        decryptedTextArea.setText("");
+                        logOperation("Encryption", inputText, encryptedText, password);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(frame, "Encryption Error: " + ex.getMessage());
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Please enter both text and password.");
+                }
+            }
+        });
+
+        decryptButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                String encryptedText = encryptedTextArea.getText();
+                String password = new String(passwordField.getPassword());
+                if (!encryptedText.isEmpty() && !password.isEmpty()) {
+                    try {
+                        String decryptedText = AESBase64EncryptDecryptGUI.decrypt(encryptedText, password);
+                        decryptedTextArea.setText(decryptedText);
+                        inputTextArea.setText("");
+                        logOperation("Decryption", decryptedText, encryptedText, password);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(frame, "Decryption Error: " + ex.getMessage());
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Please enter both encrypted text and password.");
+                }
+            }
+        });
+
+        frame.setVisible(true);
+    }
+
+    public static String encrypt(String data, String password) throws Exception {
+        SecretKey secretKey = generateSecretKey(password);
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(IV));
+        byte[] encryptedBytes = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+    }
+
+    public static String decrypt(String base64Data, String password) throws Exception {
+        SecretKey secretKey = generateSecretKey(password);
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(IV));
+        byte[] decodedBytes = Base64.getDecoder().decode(base64Data);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return new String(decryptedBytes, StandardCharsets.UTF_8);
+    }
+
+    private static SecretKey generateSecretKey(String password) throws Exception {
+        byte[] salt = "12345678".getBytes();
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
+        SecretKeyFactory factory = SecretKeyFactory.getInstance(SECRET_KEY_ALGORITHM);
+        byte[] secretKeyBytes = factory.generateSecret(spec).getEncoded();
+        return new SecretKeySpec(secretKeyBytes, "AES");
+    }
+
+    private static void logOperation(String operation, String input, String output, String password) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOG_FILE_PATH, true))) {
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            writer.write("[" + timestamp + "] " + operation + " Operation:\n");
+            writer.write("Password: " + password + "\n");
+            writer.write("Input Text: " + input + "\n");
+            writer.write("Output Text: " + output + "\n");
+            writer.write("---------------------------------------------------\n");
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+}

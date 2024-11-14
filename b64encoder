@@ -1,0 +1,210 @@
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.spec.KeySpec;
+import java.text.SimpleDateFormat;
+import java.util.Base64;
+import java.util.Date;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+
+public class AESBase64EncryptDecryptGUI {
+    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
+    private static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final byte[] IV = new byte[16];
+    private static final String LOG_FILE_PATH = "encryption_log.txt";
+
+    public AESBase64EncryptDecryptGUI() {}
+
+
+    public static void main(String[] args) {
+        String disclaimer = "DISCLAIMER:\n\n"
+                + "This software is provided \"as-is,\" without any express or implied warranties. "
+                + "In no event shall the developers be held liable for any damages arising from the use of this software.\n\n"
+                + "No support or maintenance is provided, and use of this program is entirely at your own risk.\n\n"
+                + "By proceeding, you agree to these terms.\n\n"
+                + "Click OK to continue.";
+
+        int response = JOptionPane.showConfirmDialog(null, disclaimer, "Disclaimer", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (response != JOptionPane.OK_OPTION) {
+            System.exit(0);
+        }
+
+        final JFrame frame = new JFrame("AES Base64 Encrypt/Decrypt Tool with Password");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(800, 600);
+        frame.setLayout(new GridBagLayout());
+
+        // Customize Layout
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(0, 0, 5, 5);
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.anchor = GridBagConstraints.CENTER;
+
+        // Create labels
+        JLabel inputLabel = new JLabel("Enter Text to Encrypt:");
+        JLabel passwordLabel = new JLabel("Enter Password:");
+        JLabel encryptedLabel = new JLabel("Encrypted (Base64):");
+        JLabel decryptedLabel = new JLabel("Decrypted (Original):");
+
+        // Customize text areas with titled borders
+        final JTextArea inputTextArea = createStyledTextArea("Text to Encrypt");
+        final JTextArea encryptedTextArea = createStyledTextArea("Encrypted (Base64)");
+        final JTextArea decryptedTextArea = createStyledTextArea("Decrypted Text");
+
+        // Password field
+        final JPasswordField passwordField = new JPasswordField(20);
+        passwordField.setFont(new Font("Arial", Font.PLAIN, 14));
+        passwordField.setBorder(BorderFactory.createTitledBorder("Password"));
+
+        // Buttons
+        JButton encryptButton = createStyledButton("Encrypt");
+        JButton decryptButton = createStyledButton("Decrypt");
+        JButton clearButton = new JButton("Clear All");
+
+        // Add components to frame
+
+        addComponentToFrame(frame, gbc, inputLabel, 0, 0, 2, 1);
+        addComponentToFrame(frame, gbc, inputTextArea, 0, 1, 2, 1);
+        addComponentToFrame(frame, gbc, passwordLabel, 0, 2, 1, 1);
+        addComponentToFrame(frame, gbc, passwordField, 1, 2, 1, 1);
+        addComponentToFrame(frame, gbc, encryptButton, 0, 3, 1, 1);
+        addComponentToFrame(frame, gbc, encryptedLabel, 0, 4, 2, 1);
+        addComponentToFrame(frame, gbc, encryptedTextArea, 0, 5, 2, 1);
+        addComponentToFrame(frame, gbc, decryptButton, 0, 6, 1, 1);
+        addComponentToFrame(frame, gbc, decryptedLabel, 0, 7, 2, 1);
+        addComponentToFrame(frame, gbc, decryptedTextArea, 0, 8, 2, 1);
+        addComponentToFrame(frame, gbc, clearButton, 0, 9, 0, 1);
+
+        // Button actions
+        encryptButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                String inputText = inputTextArea.getText();
+                String password = new String(passwordField.getPassword());
+                if (!inputText.isEmpty() && !password.isEmpty()) {
+                    try {
+                        String encryptedText = AESBase64EncryptDecryptGUI.encrypt(inputText, password);
+                        encryptedTextArea.setText(encryptedText);
+                        decryptedTextArea.setText("");
+                        logOperation("Encryption", inputText, encryptedText, password);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(frame, "Encryption Error: " + ex.getMessage());
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Please enter both text and password.");
+                }
+            }
+        });
+
+        decryptButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                String encryptedText = encryptedTextArea.getText();
+                String password = new String(passwordField.getPassword());
+                if (!encryptedText.isEmpty() && !password.isEmpty()) {
+                    try {
+                        String decryptedText = AESBase64EncryptDecryptGUI.decrypt(encryptedText, password);
+                        decryptedTextArea.setText(decryptedText);
+                        inputTextArea.setText("");
+                        logOperation("Decryption", decryptedText, encryptedText, password);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(frame, "Decryption Error: " + ex.getMessage());
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Please enter both encrypted text and password.");
+                }
+            }
+        });
+
+
+        clearButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                clearAllFields(inputTextArea, encryptedTextArea, decryptedTextArea, passwordField);
+            }
+        });
+
+
+        frame.setVisible(true);
+    }
+
+    private static JTextArea createStyledTextArea(String title) {
+        JTextArea textArea = new JTextArea(3, 20);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        textArea.setFont(new Font("Arial", Font.PLAIN, 14));
+        textArea.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), title, TitledBorder.LEFT, TitledBorder.TOP));
+        return textArea;
+    }
+
+    private static JButton createStyledButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Arial", Font.BOLD, 14));
+        button.setFocusPainted(false);
+        button.setBackground(new Color(70, 130, 180));
+        button.setForeground(Color.WHITE);
+        return button;
+    }
+
+    private static void addComponentToFrame(JFrame frame, GridBagConstraints gbc, Component comp, int x, int y, int width, int height) {
+        gbc.gridx = x;
+        gbc.gridy = y;
+        gbc.gridwidth = width;
+        gbc.gridheight = height;
+        frame.add(comp, gbc);
+    }
+
+    public static String encrypt(String data, String password) throws Exception {
+        SecretKey secretKey = generateSecretKey(password);
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(IV));
+        byte[] encryptedBytes = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+    }
+
+    public static String decrypt(String base64Data, String password) throws Exception {
+        SecretKey secretKey = generateSecretKey(password);
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(IV));
+        byte[] decodedBytes = Base64.getDecoder().decode(base64Data);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return new String(decryptedBytes, StandardCharsets.UTF_8);
+    }
+
+    private static SecretKey generateSecretKey(String password) throws Exception {
+        byte[] salt = "12345678".getBytes();
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
+        SecretKeyFactory factory = SecretKeyFactory.getInstance(SECRET_KEY_ALGORITHM);
+        byte[] secretKeyBytes = factory.generateSecret(spec).getEncoded();
+        return new SecretKeySpec(secretKeyBytes, "AES");
+    }
+
+    private static void logOperation(String operation, String input, String output, String password) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOG_FILE_PATH, true))) {
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            writer.write("[" + timestamp + "] " + operation + " Operation:\n");
+            writer.write("Password: " + password + "\n");
+            writer.write("Input Text: " + input + "\n");
+            writer.write("Output Text: " + output + "\n");
+            writer.write("---------------------------------------------------\n");
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private static void clearAllFields(JTextArea inputTextArea, JTextArea encryptedTextArea, JTextArea decryptedTextArea, JPasswordField passwordField) {
+        inputTextArea.setText("");
+        encryptedTextArea.setText("");
+        decryptedTextArea.setText("");
+        passwordField.setText("");
+    }
+
+}
